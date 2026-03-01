@@ -1,0 +1,45 @@
+
+<mujoco model="iiwa14 scene">
+  <!-- 调整坐标系使IIWA机械臂基座位于Table工作台面上 -->
+  <include file="iiwa14.xml"/>
+
+  <statistic center="0.2 0 0.2" extent="1.0"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="-120" elevation="-20"/>
+  </visual>
+
+  <default>
+    <include file="table_default.xml"/>
+  </default>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    <include file="table_assets.xml"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+
+    <!-- Table positioned at origin -->
+    <include file="./table_body.xml"/>
+
+    <!-- World reference frame at table surface level (z=0.801m) -->
+    <body name="world_frame" pos="0 0 0.801">
+      <geom name="X" type="cylinder" size="0.005" fromto="0 0 0 0.3 0 0" rgba="1 0 0 1" contype="0" conaffinity="0"/>
+      <geom name="Y" type="cylinder" size="0.005" fromto="0 0 0 0 0.3 0" rgba="0 1 0 1" contype="0" conaffinity="0"/>
+      <geom name="Z" type="cylinder" size="0.005" fromto="0 0 0 0 0 0.3" rgba="0 0 1 1" contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- Target point for admittance control (above table surface) -->
+    <!-- <body name="target" mocap="true" pos="0.3 0.0 1.3">
+      <geom type="sphere" size="0.02" rgba="0 1 0 0.5" contype="0" conaffinity="0"/>
+    </body> -->
+  </worldbody>
+</mujoco>
