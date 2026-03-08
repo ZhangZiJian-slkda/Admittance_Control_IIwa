@@ -1,4 +1,15 @@
 """
+Description: Robotic Arm Motion Control Algorithm
+Author: Zhang-sklda 845603757@qq.com
+Date: 2026-03-01 22:06:18
+Version: 1.0.0
+LastEditors: Zhang-sklda 845603757@qq.com
+LastEditTime: 2026-03-07 22:32:31
+FilePath: /Admittance_Control_IIwa/Test/visualize_scene.py
+Copyright (c) 2026 by Zhang-sklda, All Rights Reserved.
+symbol_custom_string_obkoro1_tech: Tech: Motion Control | MuJoCo | ROS | Kinematics
+"""
+"""
 KUKA IIWA with Table - MuJoCo可视化脚本
 """
 import os

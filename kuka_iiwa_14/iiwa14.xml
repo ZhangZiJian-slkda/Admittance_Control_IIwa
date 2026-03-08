@@ -125,6 +125,7 @@
                 <geom class="collision" size="0.04" pos="0.01 0.065 0.1655"/>
                 <geom class="collision" size="0.035" pos="-0.012 0.065 0.1855"/>
                 <geom class="collision" size="0.035" pos="0.012 0.065 0.1855"/>
+
                 <body name="link6" pos="0 0 0.2155" quat="1 1 0 0">
                   <inertial mass="1.8" pos="0 0.0006 0.0004" diaginertia="0.0049 0.0047 0.0036" quat="1 1 0 0"/>
                   <joint name="joint6" class="joint2"/>
@@ -133,16 +134,37 @@
                   <geom class="collision" size="0.055" pos="0 0 -0.059"/>
                   <geom class="collision" size="0.065" pos="0 -0.03 0.011"/>
                   <geom class="collision" size="0.08"/>
+
                   <body name="link7" pos="0 0.081 0" quat="0 0 1 1">
                     <inertial mass="1.2" pos="0 0 0.02" diaginertia="0.001 0.001 0.001"/>
                     <joint name="joint7" class="joint3"/>
                     <geom class="visual" mesh="link_7"/>
                     <geom class="collision" size="0.06" pos="0 0 0.001"/>
                     <site pos="0 0 0.045" name="attachment_site"/>
-                    <!--你需要添加的-->
-                    <body name="force_sensor" pos="0 0 0.05" euler="3.14 0 3.14">
-                        <geom name='force_sensor_geom' type="sphere" mass="0.0" size="0.04" rgba="0 1 0 0.3"/>
-                        <site name="force_sensor_site" pos="0 0 0" quat="1 0 0 0"/>
+
+                    <body name="tool_rod" pos="0 0 0.045">
+                      <inertial mass="0.02" pos="0 0 0.05" diaginertia="5e-5 5e-5 1e-5"/>
+
+                      <geom name="tool_rod_geom"
+                            type="capsule"
+                            fromto="0 0 0 0 0 0.10"
+                            size="0.008"
+                            rgba="0.2 0.8 0.2 1"
+                            contype="1"
+                            conaffinity="1"/>
+
+                      <site name="force_sensor_site" pos="0 0 0"/>
+
+                      <body name="tip_ball" pos="0 0 0.10">
+                        <inertial mass="0.02" pos="0 0 0" diaginertia="1e-5 1e-5 1e-5"/>
+                        <geom name="tip_ball_geom"
+                              type="sphere"
+                              size="0.015"
+                              rgba="1 0 0 1"
+                              contype="1"
+                              conaffinity="1"/>
+                        <site name="tcp_site" pos="0 0 0"/>
+                      </body>
                     </body>
                   </body>
                 </body>
@@ -155,9 +177,9 @@
   </worldbody>
 
   <sensor>
-    <force site="force_sensor_site"/>
+    <force name="force_sensor" site="force_sensor_site"/>
   </sensor>
-
+  
   <contact>
     <exclude body1="base" body2="link1"/>
     <exclude body1="base" body2="link2"/>
