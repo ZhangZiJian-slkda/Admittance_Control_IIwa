@@ -5,7 +5,7 @@ Date: 2026-03-08 15:29:17
 Version: 1.0.0
 LastEditors: Zhang-sklda 845603757@qq.com
 LastEditTime: 2026-03-08 17:01:24
-FilePath: /Admittance_Control_IIwa/MujocoSim_test.py
+FilePath: /Admittance_Control_IIwa/Test/MujocoSim_test.py
 Copyright (c) 2026 by Zhang-sklda, All Rights Reserved.
 symbol_custom_string_obkoro1_tech: Tech: Motion Control | MuJoCo | ROS | Kinematics
 """

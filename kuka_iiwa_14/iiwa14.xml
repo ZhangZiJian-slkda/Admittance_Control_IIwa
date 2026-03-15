@@ -153,7 +153,7 @@
                             contype="1"
                             conaffinity="1"/>
 
-                      <site name="force_sensor_site" pos="0 0 0"/>
+                      <!-- <site name="force_sensor_site" pos="0 0 0"/> -->
 
                       <body name="tip_ball" pos="0 0 0.10">
                         <inertial mass="0.02" pos="0 0 0" diaginertia="1e-5 1e-5 1e-5"/>
@@ -163,6 +163,7 @@
                               rgba="1 0 0 1"
                               contype="1"
                               conaffinity="1"/>
+                        <site name="force_sensor_site" pos="0 0 0"/>
                         <site name="tcp_site" pos="0 0 0"/>
                       </body>
                     </body>

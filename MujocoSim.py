@@ -1,92 +1,88 @@
 """
-Description: Robotic Arm Motion Control Algorithm
+Description: MuJoCo simulation wrapper for the KUKA iiwa14 admittance task
 Author: Zhang-sklda 845603757@qq.com
-Date: 2026-03-07 22:32:10
-Version: 1.0.0
-LastEditors: Zhang-sklda 845603757@qq.com
-LastEditTime: 2026-03-08 23:24:02
-FilePath: /Admittance_Control_IIwa/MujocoSim.py
-Copyright (c) 2026 by Zhang-sklda, All Rights Reserved.
-symbol_custom_string_obkoro1_tech: Tech: Motion Control | MuJoCo | ROS | Kinematics
 """
-import time
-from copy import deepcopy
+import os
+
 import mujoco
 import mujoco.viewer
 import numpy as np
-import os
-import pinocchio as pin
-from pinocchio import RobotWrapper
-from scipy.spatial.transform import Rotation as R
 
-XML_PATH = os.path.join(os.path.dirname(__file__), 'kuka_iiwa_14')
+
+XML_PATH = os.path.join(os.path.dirname(__file__), "kuka_iiwa_14")
+
 
 class IIwaSim:
-    def __init__(self, render = True,dt = 0.001,xml_path=None):
-        # Load the MuJoCo model
-        if xml_path is not None:
-            self.model = mujoco.MjModel.from_xml_path(xml_path)
-        else:
-            self.model = mujoco.MjModel.from_xml_path(
-                os.path.join(XML_PATH, "scene.xml")
-            )
-        # self.simulated = True
-        self.data = mujoco.MjData(self.model)
-        self.dt = dt
-        self.model.opt.timestep = self.dt
-        self.model.opt.gravity[2] = -9.81
-        self.step_count = 0
-        self.joint_names = [f'joint{i}' for i in range(1, 8)]
-        self.joint_initial_positions = np.array([0.0, -0.785398163, 0.0, -1.57, 0.0, 1.57079632679, 0.785398163397])
+    def __init__(self, render=True, dt=0.001, xml_path=None):
+        if xml_path is None:
+            xml_path = os.path.join(XML_PATH, "scene.xml")
 
+        self.model = mujoco.MjModel.from_xml_path(xml_path)
+        self.data = mujoco.MjData(self.model)
+        self.kin_data = mujoco.MjData(self.model)
+        self.dt = dt
+        self.model.opt.timestep = dt
+        self.model.opt.gravity[2] = -9.81
+
+        self.render = render
+        self.viewer = None
         if render:
             self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
-            self.render = True
             self.viewer.cam.distance = 3.0
             self.viewer.cam.elevation = -45
             self.viewer.cam.azimuth = 90
-            self.viewer.cam.lookat[:] = np.array([0.0, -0.25,0.824])
-        else:
-            self.render = False
+            self.viewer.cam.lookat[:] = np.array([0.0, -0.25, 0.824])
 
-        mujoco.mj_step(self.model, self.data)
-        if self.render:
-            self.viewer.sync()
+        self.step_count = 0
         self.nv = self.model.nv
-        self.jacobian_position = np.zeros((3,self.nv))
-        self.jacobian_rotation = np.zeros((3,self.nv))
+        self.joint_names = [f"joint{i}" for i in range(1, 8)]
+        self.joint_initial_positions = np.array(
+            [0.0, 0.0, 0.0, -1.5708, 0.0, 1.5708, 0.0]
+        )
+        self.force_bias_local = np.zeros(3)
 
-        self.M = np.zeros((self.nv,self.nv))
-        self.actuator_tau = np.zeros(7)
-        self.tau_ff = np.zeros(7)
-        self.dq_des = np.zeros(7)
+        self.tcp_site_id = self._require_id(mujoco.mjtObj.mjOBJ_SITE, "tcp_site")
+        self.force_site_id = self._require_id(
+            mujoco.mjtObj.mjOBJ_SITE, "force_sensor_site"
+        )
+        self.force_sensor_id = self._require_id(
+            mujoco.mjtObj.mjOBJ_SENSOR, "force_sensor"
+        )
+        self.tip_body_id = self._require_id(mujoco.mjtObj.mjOBJ_BODY, "tip_ball")
+        self.tool_body_id = self._require_id(mujoco.mjtObj.mjOBJ_BODY, "tool_rod")
 
-        urdf = os.path.join(XML_PATH, "iiwa14.urdf")
-        model = pin.buildModelFromUrdf(urdf)
-        self.pin_robot = RobotWrapper(model)
-
-        # 这里后续改成你URDF里真实的末端frame名字
-        self.ee_frame_name = "iiwa_link_tcp"
-        self.ee_frame_id = self.pin_robot.model.getFrameId(self.ee_frame_name)
-        
         self.reset()
-        print("[IIwaSim] 初始化成功")
+        self.calibrate_force_sensor()
+        print("[IIwaSim] Initialized")
 
-    def forward_kinematics(self,q,update = True):
-        pin.forwardKinematics(self.pin_robot.model, self.pin_robot.data, q)
-        pin.updateFramePlacements(self.pin_robot.model, self.pin_robot.data)
-        forward_kinematics = self.pin_robot.framePlacement(q, self.ee_frame_id, update_kinematics=update)
-        return forward_kinematics.homogeneous
+    def _require_id(self, obj_type, name):
+        obj_id = mujoco.mj_name2id(self.model, obj_type, name)
+        if obj_id < 0:
+            raise ValueError(f"Required MuJoCo object not found: {name}")
+        return obj_id
 
-    # 获取机器人状态 由MuJoCo提供
-    def get_state(self):
-        return self.data.qpos[:7].copy(), self.data.qvel[:7].copy()
-    
+    def _forward_data(self, data, q, dq=None):
+        data.qpos[:7] = np.asarray(q, dtype=float).reshape(7)
+        if dq is None:
+            data.qvel[:7] = 0.0
+        else:
+            data.qvel[:7] = np.asarray(dq, dtype=float).reshape(7)
+        data.ctrl[:7] = data.qpos[:7]
+        mujoco.mj_forward(self.model, data)
+        return data
+
+    def _site_pose(self, data, site_id):
+        pose = np.eye(4)
+        pose[:3, :3] = data.site_xmat[site_id].reshape(3, 3)
+        pose[:3, 3] = data.site_xpos[site_id]
+        return pose
+
     def reset(self):
         mujoco.mj_resetData(self.model, self.data)
         self.data.qpos[:7] = self.joint_initial_positions.copy()
         self.data.qvel[:7] = np.zeros(7)
         self.data.ctrl[:7] = self.joint_initial_positions.copy()
+        self.data.xfrc_applied[:] = 0.0
         mujoco.mj_forward(self.model, self.data)
 
         for _ in range(200):
@@ -94,78 +90,103 @@ class IIwaSim:
             if self.render:
                 self.viewer.sync()
 
-        print("reset qpos:", self.data.qpos[:7])
-        print("reset ctrl:", self.data.ctrl[:7])
+        self._forward_data(self.kin_data, self.data.qpos[:7], self.data.qvel[:7])
 
-    def get_gravity(self,q):
-        return self.pin_robot.gravity(q)
-    
-    def get_jacobian(self,q):
-        pin.computeJointJacobians(self.pin_robot.model, self.pin_robot.data, q)
-        pin.updateFramePlacements(self.pin_robot.model, self.pin_robot.data)
+    def get_state(self):
+        return self.data.qpos[:7].copy(), self.data.qvel[:7].copy()
 
-        J_temp = pin.computeFrameJacobian(
-            self.pin_robot.model,
-            self.pin_robot.data,
-            q,
-            self.ee_frame_id,
-            pin.ReferenceFrame.LOCAL_WORLD_ALIGNED
+    def get_joint_acceleration(self):
+        return self.data.qacc[:7].copy()
+
+    def get_pose(self, q=None):
+        if q is None:
+            return self._site_pose(self.data, self.tcp_site_id)
+        data = self._forward_data(self.kin_data, q)
+        return self._site_pose(data, self.tcp_site_id)
+
+    def forward_kinematics(self, q):
+        return self.get_pose(q)
+
+    def get_jacobian(self, q=None):
+        jacp = np.zeros((3, self.nv))
+        jacr = np.zeros((3, self.nv))
+        data = self.data if q is None else self._forward_data(self.kin_data, q)
+        mujoco.mj_jacSite(self.model, data, jacp, jacr, self.tcp_site_id)
+        return np.vstack((jacp[:, :7], jacr[:, :7]))
+
+    def get_bias_forces(self, q=None, dq=None):
+        data = self.data if q is None and dq is None else self._forward_data(
+            self.kin_data,
+            self.get_state()[0] if q is None else q,
+            self.get_state()[1] if dq is None else dq,
         )
-        J = np.zeros((6, 7))
-        J[0:3, :] = J_temp[3:6, :7]   # linear
-        J[3:6, :] = J_temp[0:3, :7]   # angular
-        return J
-    
-    def get_pose(self,q):
-        pin.forwardKinematics(self.pin_robot.model, self.pin_robot.data, q)
-        pin.updateFramePlacements(self.pin_robot.model, self.pin_robot.data)
-        T = self.pin_robot.framePlacement(q, self.ee_frame_id)
-        return T.homogeneous
-    
-    def get_ee_force_torque(self):
-        """获取末端执行器的力和力矩传感器数据"""
-        sensor_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_SENSOR, "force_sensor"
-        )
-        if sensor_id < 0:
-            return np.zeros(3)
-        adr = self.model.sensor_adr[sensor_id]
-        dim = self.model.sensor_dim[sensor_id]
-        wrench = self.data.sensordata[adr:adr+dim].copy()
-        return wrench[:3]   # 这里只取力
-    
+        return data.qfrc_bias[:7].copy()
+
+    def get_gravity(self, q=None):
+        data = self.data if q is None else self._forward_data(self.kin_data, q, np.zeros(7))
+        return data.qfrc_bias[:7].copy()
+
+    def get_ee_force_local(self, subtract_bias=True):
+        adr = self.model.sensor_adr[self.force_sensor_id]
+        dim = self.model.sensor_dim[self.force_sensor_id]
+        force = self.data.sensordata[adr : adr + dim].copy()[:3]
+        if subtract_bias:
+            force -= self.force_bias_local
+        return force
+
+    def get_sensor_force_world(self, subtract_bias=True):
+        force_local = self.get_ee_force_local(subtract_bias=subtract_bias)
+        rotation = self.data.site_xmat[self.force_site_id].reshape(3, 3)
+        return rotation @ force_local
+
+    def get_ee_force_world(self, subtract_bias=True):
+        # MuJoCo force sensors report the interaction transmitted through the site body.
+        # For admittance control we want the force applied on the tool by the environment.
+        return -self.get_sensor_force_world(subtract_bias=subtract_bias)
+
+    def get_ee_force_torque(self, subtract_bias=True):
+        force_world = self.get_ee_force_world(subtract_bias=subtract_bias)
+        torque_world = np.zeros(3)
+        return force_world, torque_world
+
+    def get_applied_body_force(self):
+        return self.data.xfrc_applied[self.tip_body_id, :3].copy()
+
+    def calibrate_force_sensor(self, samples=200):
+        if samples <= 0:
+            self.force_bias_local[:] = 0.0
+            return self.force_bias_local.copy()
+
+        adr = self.model.sensor_adr[self.force_sensor_id]
+        dim = self.model.sensor_dim[self.force_sensor_id]
+        samples_buffer = []
+
+        for _ in range(samples):
+            mujoco.mj_step(self.model, self.data)
+            if self.render:
+                self.viewer.sync()
+            samples_buffer.append(self.data.sensordata[adr : adr + dim].copy()[:3])
+
+        self.step_count += samples
+        self.force_bias_local = np.mean(samples_buffer, axis=0)
+        return self.force_bias_local.copy()
+
     def step(self):
-        """Execute one simulation step."""
         self.step_count += 1
         mujoco.mj_step(self.model, self.data)
         if self.render:
             self.viewer.sync()
-    
-    def close(self):
-        if self.render:
-            self.viewer.close() 
 
-    def send_joint_position(self,q_cmd):
-        q_cmd = np.asarray(q_cmd).reshape(7)
+    def send_joint_position(self, q_cmd):
+        q_cmd = np.asarray(q_cmd, dtype=float).reshape(7)
+        q_cmd = np.clip(
+            q_cmd,
+            self.model.actuator_ctrlrange[:7, 0],
+            self.model.actuator_ctrlrange[:7, 1],
+        )
         self.data.ctrl[:7] = q_cmd
         self.step()
 
-    def get_ee_force_world(self):
-        sensor_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_SENSOR, "force_sensor"
-        )
-        if sensor_id < 0:
-            return np.zeros(3)
-
-        adr = self.model.sensor_adr[sensor_id]
-        dim = self.model.sensor_dim[sensor_id]
-        f_local = self.data.sensordata[adr:adr+dim].copy()[:3]  # 取力部分
-
-        site_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_SITE, "force_sensor_site"
-        )
-        R_ws = self.data.site_xmat[site_id].reshape(3, 3)
-
-        f_world = R_ws @ f_local
-        return f_world
-    
+    def close(self):
+        if self.viewer is not None:
+            self.viewer.close()
