@@ -1,4 +1,15 @@
 """
+Description: Robotic Arm Motion Control Algorithm
+Author: Zhang-sklda 845603757@qq.com
+Date: 2026-03-15 22:55:40
+Version: 1.0.0
+LastEditors: Zhang-sklda 845603757@qq.com
+LastEditTime: 2026-03-15 23:39:47
+FilePath: /Admittance/Admittance_Control_IIwa/admittance.py
+Copyright (c) 2026 by Zhang-sklda, All Rights Reserved.
+symbol_custom_string_obkoro1_tech: Tech: Motion Control | MuJoCo | ROS | Kinematics
+"""
+"""
 Description: Cartesian admittance control for the MuJoCo KUKA iiwa14 model
 Author: Zhang-sklda 845603757@qq.com
 """
@@ -26,21 +37,26 @@ def main(render=True, steps=50000):
     my_robot = IIwaSim(render=render, dt=0.001)
     dt = my_robot.dt
 
-    # Position-controlled iiwa14 needs softer outer-loop admittance than the FR3 torque case.
-    m_adm = np.diag([2.5, 2.5, 2.5])
-    d_adm = np.diag([90.0, 90.0, 90.0])
-    k_adm = np.diag([140.0, 140.0, 140.0])
+    # Position-controlled iiwa14 needs a softer outer loop than the FR3 torque case.
+    # Use mass-damper admittance so the robot stays at the displaced position
+    # after the external force disappears.
+    # m_adm = np.diag([2.5, 2.5, 2.5])
+    # d_adm = np.diag([90.0, 90.0, 90.0])
+    ############
+    m_adm = np.diag([1.0, 1.0, 1.0])
+    d_adm = np.diag([50.0, 50.0, 50.0])
+
 
     joint, _ = my_robot.get_state()
     pose_ref = my_robot.get_pose(joint)
-    x_ref = pose_ref[:3, 3].copy()
     r_ref = pose_ref[:3, :3].copy()
     q_home = joint.copy()
 
-    delta_x = np.zeros(3)
-    delta_dx = np.zeros(3)
+    x_des = pose_ref[:3, 3].copy()
+    dx_des = np.zeros(3)
     force_filtered = np.zeros(3)
     q_cmd = joint.copy()
+    force_active_prev = False
 
     force_alpha = 0.08
     force_deadband = 1.5
@@ -74,21 +90,29 @@ def main(render=True, steps=50000):
             f_ext = force_filtered.copy()
             if np.linalg.norm(f_ext) < force_deadband:
                 f_ext[:] = 0.0
+            force_active = np.linalg.norm(f_ext) > 0.0
 
-            delta_ddx = np.linalg.solve(
+            if force_active_prev and not force_active:
+                x_des = x.copy()
+                dx_des[:] = 0.0
+
+            ddx_des = np.linalg.solve(
                 m_adm,
-                f_ext - d_adm @ delta_dx - k_adm @ delta_x,
+                f_ext - d_adm @ dx_des,
             )
-            delta_ddx = np.clip(delta_ddx, -4.0, 4.0)
+            ddx_des = np.clip(ddx_des, -4.0, 4.0)
 
-            delta_dx += delta_ddx * dt
-            delta_dx = np.clip(delta_dx, -max_cartesian_speed, max_cartesian_speed)
+            dx_des += ddx_des * dt
+            dx_des = np.clip(dx_des, -max_cartesian_speed, max_cartesian_speed)
 
-            delta_x += delta_dx * dt
-            delta_x = np.clip(delta_x, -max_cartesian_offset, max_cartesian_offset)
+            x_des += dx_des * dt
+            x_des = np.clip(
+                x_des,
+                pose_ref[:3, 3] - max_cartesian_offset,
+                pose_ref[:3, 3] + max_cartesian_offset,
+            )
 
-            x_des = x_ref + delta_x
-            v_linear = delta_dx + kp_pos @ (x_des - x) - kd_pos @ dx
+            v_linear = dx_des + kp_pos @ (x_des - x) - kd_pos @ dx
             v_linear = np.clip(v_linear, -max_cartesian_speed, max_cartesian_speed)
 
             e_ori = orientation_error_world(rotation, r_ref)
@@ -107,13 +131,14 @@ def main(render=True, steps=50000):
             q_cmd += joint_step
             q_cmd = np.clip(q_cmd, joint - max_command_error, joint + max_command_error)
             my_robot.send_joint_position(q_cmd)
+            force_active_prev = force_active
 
             if i % 1000 == 0:
                 print(f"step={i}")
                 print("  x        =", x)
                 print("  x_des    =", x_des)
                 print("  F_ext    =", f_ext)
-                print("  delta_x  =", delta_x)
+                print("  dx_des   =", dx_des)
                 print("  q_cmd    =", q_cmd)
 
             if render:
