@@ -1,4 +1,15 @@
 """
+Description: Robotic Arm Motion Control Algorithm
+Author: Zhang-sklda 845603757@qq.com
+Date: 2026-03-15 22:55:00
+Version: 1.0.0
+LastEditors: Zhang-sklda 845603757@qq.com
+LastEditTime: 2026-03-16 21:49:24
+FilePath: /Admittance_Control_IIwa/MujocoSim.py
+Copyright (c) 2026 by Zhang-sklda, All Rights Reserved.
+symbol_custom_string_obkoro1_tech: Tech: Motion Control | MuJoCo | ROS | Kinematics
+"""
+"""
 Description: MuJoCo simulation wrapper for the KUKA iiwa14 admittance task
 Author: Zhang-sklda 845603757@qq.com
 """
@@ -37,7 +48,7 @@ class IIwaSim:
         self.nv = self.model.nv
         self.joint_names = [f"joint{i}" for i in range(1, 8)]
         self.joint_initial_positions = np.array(
-            [0.0, 0.0, 0.0, -1.5708, 0.0, 1.5708, 0.0]
+            [0.0, 0.87, 0.0, -1.5708, 0.0, 1.5708, 0.0]
         )
         self.force_bias_local = np.zeros(3)
 
