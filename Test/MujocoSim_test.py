@@ -19,7 +19,7 @@ import pinocchio as pin
 from pinocchio import RobotWrapper
 from scipy.spatial.transform import Rotation as R
 
-XML_PATH = os.path.join(os.path.dirname(__file__), "kuka_iiwa_14")
+XML_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "kuka_iiwa_14")
 
 
 class IIwaSim:

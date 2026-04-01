@@ -102,7 +102,7 @@ python Test/visualize_scene.py
 
 ## Control Logic
 
-`admittance.py` 当前实现的是笛卡尔空间导纳控制外环加阻尼伪逆逆运动学跟踪：
+`admittance.py` 当前实现的是笛卡尔空间导纳控制外环加阻尼伪逆运动学跟踪：
 
 - 根据末端测得外力计算期望笛卡尔速度和位置偏移
 - 通过 Jacobian 伪逆把末端速度指令映射到关节速度
@@ -115,7 +115,7 @@ python Test/visualize_scene.py
 
 - 当前主程序使用位置控制，不是力矩控制
 - `Test/` 下脚本包含一些历史实验代码，与主流程不完全一致
-- `verify_xml.py` 和 `visualize_scene.py` 中存在绝对路径写法，如果你更换仓库位置，建议改为相对路径
+- `visualize_scene.py` 中仍存在绝对路径写法，如果你更换仓库位置，建议改为相对路径
 - MuJoCo 图形界面依赖本地图形环境；WSL、SSH 或 Docker 下可能需要额外配置显示转发
 
 ## Recommended Next Improvements
